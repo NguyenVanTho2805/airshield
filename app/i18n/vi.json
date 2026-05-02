@@ -1,0 +1,41 @@
+{
+  "recommendations": {
+    "low": [
+      "Chất lượng không khí tốt! Bạn có thể hoạt động ngoài trời thoải mái.",
+      "Hôm nay là ngày tuyệt vời để đi bộ hoặc đạp xe."
+    ],
+    "moderate": [
+      "Chất lượng không khí ở mức chấp nhận được.",
+      "Nhóm nhạy cảm (người già, trẻ em, người có bệnh hô hấp) nên hạn chế hoạt động ngoài trời kéo dài."
+    ],
+    "high": [
+      "Hạn chế vận động mạnh ngoài trời.",
+      "Đóng cửa sổ khi có thể.",
+      "Cân nhắc đeo khẩu trang khi ra đường.",
+      "Bật máy lọc không khí trong nhà."
+    ],
+    "very_high": [
+      "Tránh hoạt động ngoài trời.",
+      "Sử dụng máy lọc không khí trong nhà.",
+      "Đeo khẩu trang N95 nếu bắt buộc phải ra ngoài.",
+      "Theo dõi các triệu chứng sức khỏe."
+    ],
+    "hazardous": [
+      "Ở trong nhà, đóng tất cả cửa sổ và cửa ra vào.",
+      "Sử dụng máy lọc không khí HEPA.",
+      "Tránh mọi hoạt động thể chất ngoài trời.",
+      "Tìm gặp bác sĩ nếu có triệu chứng khó thở, đau ngực."
+    ]
+  },
+  "conditions": {
+    "asthma": "Mang theo ống hít cấp cứu theo người.",
+    "heart_disease": "Theo dõi nhịp tim và huyết áp thường xuyên.",
+    "copd": "Tránh tiếp xúc với khói bụi. Mang thuốc giãn phế quản.",
+    "pregnant": "Hạn chế ra ngoài khi AQI > 100 để bảo vệ thai nhi.",
+    "sinus": "Đeo khẩu trang lọc PM2.5 để giảm kích ứng xoang.",
+    "allergies": "Giữ cửa sổ đóng, dùng máy lọc không khí HEPA trong nhà."
+  },
+  "warnings": {
+    "high_risk": "⚠️ CẢNH BÁO: Chỉ số AQI cá nhân của bạn ({perceived_aqi}) vượt ngưỡng an toàn. Hãy có biện pháp bảo vệ ngay!"
+  }
+}

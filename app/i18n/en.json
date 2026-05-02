@@ -1,0 +1,41 @@
+{
+  "recommendations": {
+    "low": [
+      "Air quality is good! You can enjoy outdoor activities comfortably.",
+      "Today is a great day to walk or cycle."
+    ],
+    "moderate": [
+      "Air quality is acceptable.",
+      "Sensitive groups (elderly, children, people with respiratory conditions) should consider reducing prolonged outdoor exertion."
+    ],
+    "high": [
+      "Reduce prolonged outdoor exertion.",
+      "Keep windows closed when possible.",
+      "Consider wearing a mask outdoors.",
+      "Turn on air purifiers indoors."
+    ],
+    "very_high": [
+      "Avoid outdoor activities.",
+      "Use air purifiers indoors.",
+      "Wear N95 mask if going outside is unavoidable.",
+      "Monitor for symptoms."
+    ],
+    "hazardous": [
+      "Stay indoors with all windows and doors closed.",
+      "Use HEPA air purifiers.",
+      "Avoid all outdoor physical activities.",
+      "Seek medical attention if experiencing difficulty breathing or chest pain."
+    ]
+  },
+  "conditions": {
+    "asthma": "Keep rescue inhaler nearby at all times.",
+    "heart_disease": "Monitor heart rate and blood pressure regularly.",
+    "copd": "Avoid exposure to smoke and dust. Carry bronchodilator medication.",
+    "pregnant": "Limit outdoor time when AQI > 100 to protect your baby.",
+    "sinus": "Wear PM2.5 filter mask to reduce sinus irritation.",
+    "allergies": "Keep windows closed and use HEPA air purifier indoors."
+  },
+  "warnings": {
+    "high_risk": "⚠️ HIGH RISK ALERT: Your personalized AQI ({perceived_aqi}) exceeds the safe threshold. Take immediate precautions!"
+  }
+}

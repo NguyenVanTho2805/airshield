@@ -1,0 +1,59 @@
+# ── Python ─────────────────────────────────────────────────────────────────────
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# ── Environment / Secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+
+# ── Claude (personal notes) ────────────────────────────────────────────────────
+CLAUDE.local.md
+.claude/settings.local.json
+
+# ── Flutter / Dart ─────────────────────────────────────────────────────────────
+airshield_mobile/build/
+airshield_mobile/.dart_tool/
+airshield_mobile/.flutter-plugins
+airshield_mobile/.flutter-plugins-dependencies
+airshield_mobile/.packages
+airshield_mobile/pubspec.lock
+airshield_mobile/android/.gradle/
+airshield_mobile/android/local.properties
+airshield_mobile/android/app/debug/
+airshield_mobile/android/app/profile/
+airshield_mobile/android/app/release/
+airshield_mobile/android/key.properties
+airshield_mobile/ios/Pods/
+airshield_mobile/ios/.symlinks/
+airshield_mobile/ios/Flutter/flutter_export_environment.sh
+airshield_mobile/*.iml
+airshield_mobile/nul
+airshield_mobile/analysis.txt
+airshield_mobile/android_build_log.txt
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.suo
+*.user
+
+# ── OS ─────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
