@@ -24,7 +24,15 @@ secrets.json
 
 # ── Claude (personal notes) ────────────────────────────────────────────────────
 CLAUDE.local.md
-.claude/settings.local.json
+CLAUDE.md
+.claude/
+
+# ── Flutter unused platforms ──────────────────────────────────────────────────
+airshield_mobile/linux/
+airshield_mobile/macos/
+airshield_mobile/windows/
+airshield_mobile/web/
+airshield_mobile/.metadata
 
 # ── Flutter / Dart ─────────────────────────────────────────────────────────────
 airshield_mobile/build/
