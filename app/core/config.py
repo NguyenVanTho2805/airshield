@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     # AI/LLM Configuration
     GEMINI_API_KEY: str = ""
-    LLM_MODEL_NAME: str = "gemini-1.5-flash"
+    LLM_MODEL_NAME: str = "gemini-2.5-flash"
     LLM_MAX_TOKENS: int = 1024
     LLM_TEMPERATURE: float = 0.7
 

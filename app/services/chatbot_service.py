@@ -1,6 +1,6 @@
 """
 Chatbot Service - AI-powered conversational assistant for AirShield.
-Uses Google Gemini for natural language understanding and generation.
+Uses Google Gemini 2.5 (google-genai SDK) for natural language generation.
 """
 
 import json
@@ -11,7 +11,8 @@ from typing import Optional, List, Tuple
 import redis.asyncio as aioredis
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types as genai_types
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -20,28 +21,80 @@ from app.core.config import settings
 from app.schemas.chatbot import ChatResponse, ChatAction, ActionType
 
 
-# System prompt for the AirShield chatbot
-SYSTEM_PROMPT = """Bạn là **AirShield Assistant** - trợ lý AI thông minh chuyên về chất lượng không khí và sức khỏe.
+SYSTEM_PROMPT = """Bạn là **AirShield Assistant** — trợ lý AI chuyên về chất lượng không khí và sức khỏe.
 
-## Khả năng của bạn:
-1. **Chất lượng không khí**: Giải thích AQI, PM2.5, PM10, O3, NO2, SO2, CO và ảnh hưởng sức khỏe
-2. **Tư vấn sức khỏe**: Đưa ra lời khuyên dựa trên mức AQI và tình trạng sức khỏe người dùng
-3. **Thiết bị lọc khí**: Hướng dẫn sử dụng máy lọc không khí, thay filter
-4. **Smart Home**: Điều khiển thiết bị (bật/tắt máy lọc không khí, quạt, điều hòa)
+---
 
-## Quy tắc:
-- Trả lời bằng tiếng Việt, ngắn gọn, thân thiện
-- Nếu được hỏi về AQI cụ thể, sử dụng context data được cung cấp
-- Với câu hỏi về thiết bị, hỏi lại nếu không rõ thiết bị nào
-- Luôn đề xuất hành động cụ thể khi AQI > 100
+## KIẾN THỨC NỀN: Tiêu Chuẩn Chất Lượng Không Khí (IQAir / US EPA)
 
-## Phân loại AQI:
-- 0–50: Tốt (Good) - An toàn cho mọi người
-- 51–100: Trung bình (Moderate) - Nhóm nhạy cảm nên hạn chế
-- 101–150: Không tốt cho nhóm nhạy cảm
-- 151–200: Không lành mạnh (Unhealthy)
-- 201–300: Rất không lành mạnh (Very Unhealthy)
-- 301+: Nguy hiểm (Hazardous)
+### Bảng AQI:
+| AQI | Phân loại | Ý nghĩa |
+|-----|-----------|---------|
+| 0–50 | Tốt | An toàn cho mọi người |
+| 51–100 | Trung bình | Nhóm nhạy cảm nên hạn chế gắng sức ngoài trời |
+| 101–150 | Không tốt cho nhóm nhạy cảm | Người hen, tim mạch, già, trẻ em hạn chế ra ngoài |
+| 151–200 | Không lành mạnh | Mọi người nên hạn chế hoạt động ngoài trời, đeo khẩu trang N95 |
+| 201–300 | Rất không lành mạnh | Ở trong nhà, đóng cửa sổ, bật máy lọc không khí |
+| 301–500 | Nguy hiểm | Khẩn cấp, tránh hoàn toàn hoạt động ngoài trời |
+
+### Ngưỡng các chất ô nhiễm chính:
+| Chất | Tốt | Trung bình | USG | Không lành mạnh |
+|------|-----|------------|-----|-----------------|
+| PM2.5 (µg/m³) | 0–12 | 12.1–35.4 | 35.5–55.4 | 55.5–150.4 |
+| PM10 (µg/m³) | 0–54 | 55–154 | 155–254 | 255–354 |
+| O3 / ppb (8h) | 0–54 | 55–70 | 71–85 | 86–105 |
+| NO2 / ppb (1h) | 0–53 | 54–100 | 101–360 | 361–649 |
+| CO / ppm (8h) | 0–4.4 | 4.5–9.4 | 9.5–12.4 | 12.5–15.4 |
+
+### Lời khuyên theo nhóm đối tượng:
+
+**Người bình thường:**
+- AQI ≤ 100: Hoạt động ngoài trời bình thường
+- AQI 101–150: Hạn chế chạy bộ / tập thể dục cường độ cao ngoài trời
+- AQI 151–200: Đeo khẩu trang N95, hạn chế ra ngoài
+- AQI 201+: Ở trong nhà, đóng cửa sổ, bật máy lọc HEPA
+
+**Người hen suyễn / COPD:**
+- AQI ≤ 50: Mang theo thuốc hít dự phòng
+- AQI 51–100: Chuẩn bị thuốc cấp cứu, theo dõi triệu chứng
+- AQI 101–150: Không hoạt động ngoài trời, dùng máy lọc không khí trong nhà
+- AQI 151+: Ở trong nhà hoàn toàn; nếu khó thở → gọi cấp cứu 115
+
+**Người tim mạch / cao huyết áp:**
+- AQI ≤ 100: Theo dõi huyết áp thường xuyên
+- AQI 101–150: Tránh gắng sức, không tập ngoài trời
+- AQI 151+: Ở trong nhà; PM2.5 cao làm tăng nguy cơ nhồi máu cơ tim
+
+**Phụ nữ mang thai:**
+- AQI ≤ 50: An toàn
+- AQI 51–100: Hạn chế ra ngoài > 2 giờ liên tiếp
+- AQI 101+: Ở nhà; PM2.5 > 35 µg/m³ tăng nguy cơ sinh non và nhẹ cân
+
+**Trẻ em (< 12 tuổi):**
+- AQI ≤ 50: Cho phép chơi ngoài trời tự do
+- AQI 51–100: Giảm thời gian chơi ngoài
+- AQI 101–150: Không cho chơi thể thao ngoài trời
+- AQI 151+: Ở trong nhà, tránh vận động mạnh
+
+**Người cao tuổi (> 65 tuổi):**
+- AQI ≤ 100: Tập thể dục nhẹ buổi sáng sớm hoặc chiều tối
+- AQI 101+: Ở trong nhà, bật điều hòa hoặc máy lọc không khí
+
+### Biện pháp bảo vệ:
+- **Khẩu trang**: N95/KN95 lọc được ≥ 95% PM2.5; khẩu trang vải không có tác dụng
+- **Máy lọc không khí**: HEPA filter hiệu quả với PM2.5; CADR ≥ 200 cho phòng ≤ 20m²
+- **Thông gió**: Đóng cửa khi AQI ngoài > 100; mở cửa sổ khi AQI ngoài thấp hơn trong nhà
+- **Thực vật lọc khí**: Cây lưỡi hổ, thường xuân, dây nhện giúp lọc VOC và CO₂ trong nhà
+
+---
+
+## Quy tắc trả lời:
+1. Trả lời bằng **tiếng Việt**, ngắn gọn, thân thiện, dễ hiểu
+2. Khi có dữ liệu AQI context, sử dụng số liệu thực tế đó để trả lời
+3. Luôn đề xuất hành động cụ thể phù hợp với đối tượng người dùng và mức AQI hiện tại
+4. Không chẩn đoán bệnh; chỉ đưa lời khuyên phòng ngừa và khuyến nghị gặp bác sĩ khi cần
+5. Khi AQI > 150, luôn nhắc: đeo khẩu trang N95 và bật máy lọc không khí HEPA
+6. Với câu hỏi điều khiển thiết bị, xác nhận tên thiết bị trước khi thực hiện
 """
 
 _SESSION_KEY_PREFIX = "chat_session:"
@@ -49,24 +102,15 @@ _SESSION_TTL = 86400  # 24 hours
 
 
 class ChatbotService:
-    """
-    AI Chatbot Service for AirShield.
-    Provides conversational interface for air quality queries and device control.
-    """
+    """AI Chatbot Service using Google Gemini 2.5 (google-genai SDK)."""
 
-    def __init__(self):
-        """Initialize the chatbot service."""
-        self.model = None
+    def __init__(self) -> None:
+        self._client: Optional["genai.Client"] = None
 
         if GEMINI_AVAILABLE and settings.GEMINI_API_KEY:
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            self.model = genai.GenerativeModel(
-                model_name=settings.LLM_MODEL_NAME,
-                generation_config={
-                    "temperature": settings.LLM_TEMPERATURE,
-                    "max_output_tokens": settings.LLM_MAX_TOKENS,
-                }
-            )
+            self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+    # ── Session helpers ────────────────────────────────────────────────────────
 
     async def _get_or_create_session(
         self,
@@ -74,81 +118,48 @@ class ChatbotService:
         session_id: Optional[str],
         user_id: str = "",
     ) -> Tuple[str, dict]:
-        """Get existing session from Redis or create a new one."""
         if session_id:
             raw = await redis.get(f"{_SESSION_KEY_PREFIX}{session_id}")
             if raw:
                 return session_id, json.loads(raw)
 
-        new_id = session_id or str(uuid.uuid4())
+        sid = session_id or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        session = {
-            "user_id": user_id,
-            "messages": [],
-            "created_at": now,
-            "updated_at": now,
-        }
-        await redis.setex(f"{_SESSION_KEY_PREFIX}{new_id}", _SESSION_TTL, json.dumps(session))
-        return new_id, session
+        session = {"user_id": user_id, "messages": [], "created_at": now, "updated_at": now}
+        await redis.setex(f"{_SESSION_KEY_PREFIX}{sid}", _SESSION_TTL, json.dumps(session))
+        return sid, session
 
-    async def _save_session(
-        self,
-        redis: aioredis.Redis,
-        session_id: str,
-        session: dict,
-    ) -> None:
-        """Persist session data back to Redis, refreshing TTL."""
+    async def _save_session(self, redis: aioredis.Redis, sid: str, session: dict) -> None:
         session["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await redis.setex(f"{_SESSION_KEY_PREFIX}{session_id}", _SESSION_TTL, json.dumps(session))
+        await redis.setex(f"{_SESSION_KEY_PREFIX}{sid}", _SESSION_TTL, json.dumps(session))
+
+    # ── Context builder ────────────────────────────────────────────────────────
 
     def _build_context(
         self,
         aqi_data: Optional[dict] = None,
-        user_profile: Optional[dict] = None
+        user_profile: Optional[dict] = None,
     ) -> str:
-        """Build context string for the AI."""
-        context_parts = []
-
+        parts: list[str] = []
         if aqi_data:
-            context_parts.append(f"**Dữ liệu AQI hiện tại:**\n{json.dumps(aqi_data, ensure_ascii=False)}")
-
+            parts.append(f"**Dữ liệu AQI hiện tại:**\n{json.dumps(aqi_data, ensure_ascii=False, indent=2)}")
         if user_profile:
-            context_parts.append(f"**Hồ sơ sức khỏe người dùng:**\n{json.dumps(user_profile, ensure_ascii=False)}")
+            parts.append(f"**Hồ sơ sức khỏe người dùng:**\n{json.dumps(user_profile, ensure_ascii=False, indent=2)}")
+        return "\n\n".join(parts)
 
-        if not context_parts:
-            return ""
+    # ── Action detector ────────────────────────────────────────────────────────
 
-        return "\n\n".join(context_parts)
-
-    def _detect_action(self, message: str, response: str) -> ChatAction:
-        """Detect if an action should be triggered based on conversation."""
-        message_lower = message.lower()
-
-        # Device control keywords
-        device_keywords = ["bật", "tắt", "mở", "đóng", "điều khiển", "máy lọc", "purifier", "quạt", "điều hòa"]
-        if any(kw in message_lower for kw in device_keywords):
-            return ChatAction(
-                action_type=ActionType.CONTROL_DEVICE,
-                payload={"suggested_action": "open_device_control"}
-            )
-
-        # AQI display keywords
-        aqi_keywords = ["aqi", "chất lượng không khí", "ô nhiễm", "pm2.5", "pm25"]
-        if any(kw in message_lower for kw in aqi_keywords):
-            return ChatAction(
-                action_type=ActionType.SHOW_AQI,
-                payload={"suggested_action": "refresh_aqi"}
-            )
-
-        # Map keywords
-        map_keywords = ["bản đồ", "map", "vị trí", "location", "khu vực"]
-        if any(kw in message_lower for kw in map_keywords):
-            return ChatAction(
-                action_type=ActionType.SHOW_MAP,
-                payload={"suggested_action": "open_map"}
-            )
-
+    def _detect_action(self, message: str) -> ChatAction:
+        msg = message.lower()
+        if any(k in msg for k in ["bật", "tắt", "mở", "đóng", "điều khiển", "máy lọc", "purifier", "quạt", "điều hòa"]):
+            return ChatAction(action_type=ActionType.CONTROL_DEVICE, payload={"suggested_action": "open_device_control"})
+        if any(k in msg for k in ["aqi", "chất lượng không khí", "ô nhiễm", "pm2.5", "pm25"]):
+            return ChatAction(action_type=ActionType.SHOW_AQI, payload={"suggested_action": "refresh_aqi"})
+        if any(k in msg for k in ["bản đồ", "map", "vị trí", "location", "khu vực"]):
+            return ChatAction(action_type=ActionType.SHOW_MAP, payload={"suggested_action": "open_map"})
         return ChatAction(action_type=ActionType.NONE)
+
+    # ── Main chat method ───────────────────────────────────────────────────────
 
     async def chat(
         self,
@@ -159,115 +170,98 @@ class ChatbotService:
         user_profile: Optional[dict] = None,
         user_id: str = "",
     ) -> ChatResponse:
-        """
-        Process a chat message and return AI response.
+        sid, session = await self._get_or_create_session(redis, session_id, user_id)
+        history: list[dict] = session["messages"]
 
-        Args:
-            message: User's message
-            redis: Redis client for session persistence
-            session_id: Optional session ID for conversation continuity
-            aqi_data: Current AQI data for context
-            user_profile: User's health profile for personalization
-
-        Returns:
-            ChatResponse with AI message and optional actions
-        """
-        session_id, session = await self._get_or_create_session(redis, session_id, user_id)
-        history = session["messages"]
-
-        # Build context
         context = self._build_context(aqi_data, user_profile)
+        prompt = f"{context}\n\n**Câu hỏi:** {message}" if context else message
 
-        # Add user message to history
         history.append({"role": "user", "content": message})
 
         try:
-            if self.model:
-                # Build conversation for Gemini
-                chat_history = []
-                for msg in history[:-1]:  # Exclude current message
-                    chat_history.append({
-                        "role": msg["role"],
-                        "parts": [msg["content"]]
-                    })
+            if self._client:
+                # Build Gemini history (all messages except the latest user turn)
+                gemini_history = [
+                    genai_types.Content(
+                        role="model" if m["role"] == "assistant" else "user",
+                        parts=[genai_types.Part(text=m["content"])],
+                    )
+                    for m in history[:-1]
+                ]
 
-                # Create chat with history
-                chat = self.model.start_chat(history=chat_history)
-
-                # Build prompt with context
-                prompt = message
-                if context:
-                    prompt = f"{context}\n\n**Câu hỏi:** {message}"
-
-                # Add system prompt for first message
-                if len(history) == 1:
-                    prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
-
-                # Generate response
-                response = chat.send_message(prompt)
+                chat_session = self._client.aio.chats.create(
+                    model=settings.LLM_MODEL_NAME,
+                    config=genai_types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=settings.LLM_TEMPERATURE,
+                        max_output_tokens=settings.LLM_MAX_TOKENS,
+                    ),
+                    history=gemini_history,
+                )
+                response = await chat_session.send_message(prompt)
                 ai_response = response.text
+
             else:
-                # Fallback response when Gemini is not configured
-                ai_response = self._get_fallback_response(message, aqi_data)
+                ai_response = self._fallback_response(message, aqi_data)
 
         except Exception as e:
-            ai_response = f"Xin lỗi, tôi gặp lỗi khi xử lý câu hỏi. Vui lòng thử lại. (Error: {str(e)[:100]})"
+            ai_response = (
+                f"Xin lỗi, tôi gặp lỗi khi xử lý câu hỏi. Vui lòng thử lại. "
+                f"(Lỗi: {str(e)[:120]})"
+            )
 
-        # Add AI response to history
         history.append({"role": "assistant", "content": ai_response})
+        await self._save_session(redis, sid, session)
 
-        # Persist updated session
-        await self._save_session(redis, session_id, session)
-
-        # Detect action
-        action = self._detect_action(message, ai_response)
-
+        action = self._detect_action(message)
         return ChatResponse(
-            session_id=session_id,
+            session_id=sid,
             message=ai_response,
             action=action if action.action_type != ActionType.NONE else None,
             sources=["AirShield Database", "IQAir API"] if aqi_data else None,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
 
-    def _get_fallback_response(self, message: str, aqi_data: Optional[dict] = None) -> str:
-        """Generate fallback response when LLM is not available."""
-        message_lower = message.lower()
+    # ── Fallback (no API key) ──────────────────────────────────────────────────
 
-        # AQI queries
-        if any(kw in message_lower for kw in ["aqi", "chất lượng", "ô nhiễm", "pm2.5"]):
+    def _fallback_response(self, message: str, aqi_data: Optional[dict] = None) -> str:
+        msg = message.lower()
+        if any(k in msg for k in ["aqi", "chất lượng", "ô nhiễm", "pm2.5"]):
             if aqi_data:
-                aqi = aqi_data.get("aqi", "N/A")
-                return f"Chất lượng không khí hiện tại có AQI là **{aqi}**. " \
-                       f"{'Chất lượng tốt, bạn có thể hoạt động ngoài trời.' if int(aqi or 0) <= 50 else 'Bạn nên hạn chế hoạt động ngoài trời.'}"
+                aqi = int(aqi_data.get("aqi") or 0)
+                label = (
+                    "Tốt — an toàn cho mọi người." if aqi <= 50
+                    else "Trung bình — nhóm nhạy cảm nên hạn chế gắng sức." if aqi <= 100
+                    else "Không tốt cho nhóm nhạy cảm — hạn chế ra ngoài." if aqi <= 150
+                    else "Không lành mạnh — đeo khẩu trang N95, hạn chế ra ngoài." if aqi <= 200
+                    else "Rất không lành mạnh — ở trong nhà, bật máy lọc không khí."
+                )
+                return f"Chất lượng không khí hiện tại: **AQI {aqi}** — {label}"
             return "Để xem chất lượng không khí, vui lòng bật định vị hoặc chọn vị trí trên bản đồ."
 
-        # Greetings
-        if any(kw in message_lower for kw in ["xin chào", "hello", "hi", "chào"]):
-            return "Xin chào! Tôi là AirShield Assistant. Tôi có thể giúp bạn:\n" \
-                   "• Kiểm tra chất lượng không khí\n" \
-                   "• Tư vấn sức khỏe theo AQI\n" \
-                   "• Điều khiển thiết bị lọc không khí\n\n" \
-                   "Bạn cần giúp gì?"
+        if any(k in msg for k in ["xin chào", "hello", "hi", "chào"]):
+            return (
+                "Xin chào! Tôi là AirShield Assistant. Tôi có thể giúp bạn:\n"
+                "• Kiểm tra & giải thích chỉ số AQI, PM2.5, PM10\n"
+                "• Tư vấn sức khỏe theo mức ô nhiễm và tình trạng sức khỏe\n"
+                "• Hướng dẫn sử dụng máy lọc không khí\n"
+                "• Điều khiển thiết bị Smart Home\n\nBạn cần giúp gì?"
+            )
+        return (
+            "Tôi là AirShield Assistant. Hãy hỏi tôi về chất lượng không khí, "
+            "lời khuyên sức khỏe, hoặc điều khiển thiết bị smart home nhé!"
+        )
 
-        # Default
-        return "Tôi là AirShield Assistant. Tôi có thể giúp bạn về chất lượng không khí, " \
-               "tư vấn sức khỏe và điều khiển thiết bị smart home. Bạn muốn hỏi gì?"
+    # ── Session management ─────────────────────────────────────────────────────
 
     async def get_session_history(self, redis: aioredis.Redis, session_id: str) -> List[dict]:
-        """Get message history for a session."""
         raw = await redis.get(f"{_SESSION_KEY_PREFIX}{session_id}")
-        if not raw:
-            return []
-        return json.loads(raw).get("messages", [])
+        return json.loads(raw).get("messages", []) if raw else []
 
     async def delete_session(self, redis: aioredis.Redis, session_id: str) -> bool:
-        """Delete a chat session."""
-        deleted = await redis.delete(f"{_SESSION_KEY_PREFIX}{session_id}")
-        return bool(deleted)
+        return bool(await redis.delete(f"{_SESSION_KEY_PREFIX}{session_id}"))
 
     async def list_sessions(self, redis: aioredis.Redis, user_id: str = "") -> List[dict]:
-        """List chat sessions, optionally filtered by user_id."""
         sessions = []
         async for key in redis.scan_iter(f"{_SESSION_KEY_PREFIX}*"):
             raw = await redis.get(key)
@@ -276,7 +270,7 @@ class ChatbotService:
             data = json.loads(raw)
             if user_id and data.get("user_id") != user_id:
                 continue
-            sid = key.removeprefix(_SESSION_KEY_PREFIX)
+            sid = key.removeprefix(_SESSION_KEY_PREFIX) if isinstance(key, str) else key.decode().removeprefix(_SESSION_KEY_PREFIX)
             messages = data.get("messages", [])
             sessions.append({
                 "id": sid,
@@ -288,5 +282,4 @@ class ChatbotService:
         return sessions
 
 
-# Singleton instance
 chatbot_service = ChatbotService()
