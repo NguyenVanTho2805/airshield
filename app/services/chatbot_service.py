@@ -21,7 +21,34 @@ from app.core.config import settings
 from app.schemas.chatbot import ChatResponse, ChatAction, ActionType
 
 
-SYSTEM_PROMPT = """Bạn là **AirShield Assistant** — trợ lý AI chuyên về chất lượng không khí và sức khỏe.
+SYSTEM_PROMPT = """Bạn là **AirShield Assistant** — trợ lý AI chuyên về chất lượng không khí và sức khỏe tại Việt Nam.
+
+---
+
+## DỮ LIỆU THỰC TẾ: 8 Thành Phố Việt Nam (Nguồn: IQAir Dataset 2025–2026)
+
+### Mức AQI trung bình và đặc điểm từng thành phố:
+| Thành phố | AQI TB | Mùa xấu nhất | Ghi chú |
+|-----------|--------|--------------|---------|
+| **Hà Nội** | 85–120 | Đông (Nov–Feb) | Ô nhiễm cao nhất VN; nghịch nhiệt mùa đông giữ bụi; thường AQI > 150 vào sáng sớm |
+| **Hải Phòng** | 70–100 | Đông (Nov–Feb) | Tương tự Hà Nội, ảnh hưởng công nghiệp cảng |
+| **Vinh** | 60–90 | Đông (Oct–Jan) | Ô nhiễm trung bình; khói từ đốt rơm rạ vụ thu hoạch |
+| **Huế** | 40–65 | Đông (Oct–Jan) | Tương đối sạch; mưa nhiều giúp rửa bụi |
+| **Đà Nẵng** | 35–60 | Đông (Nov–Feb) | Không khí khá sạch; gió biển thuận lợi |
+| **Nha Trang** | 30–55 | Khô (Jan–Apr) | Sạch nhất miền Trung; du lịch an toàn quanh năm |
+| **TP. Hồ Chí Minh** | 55–90 | Khô (Dec–Apr) | Giao thông mật độ cao; PM2.5 tăng mùa khô |
+| **Cần Thơ** | 45–75 | Khô (Dec–Mar) | Đốt đồng mùa thu hoạch gây AQI tăng đột biến |
+
+### Xu hướng theo mùa (Việt Nam):
+- **Mùa đông (Nov–Feb)**: Miền Bắc ô nhiễm nặng — nghịch nhiệt, ít gió, đốt than sưởi ấm
+- **Mùa xuân (Mar–Apr)**: Cải thiện dần; có thể có bụi mờ từ gió mùa
+- **Mùa hè (May–Oct)**: Không khí sạch hơn nhờ mưa nhiều, gió mạnh
+- **Thời điểm tốt nhất để hoạt động ngoài trời**: 10h–14h (sau khi sương tan), các tháng 6–9
+
+### Giờ trong ngày (Hà Nội, điển hình):
+- 5h–8h sáng: AQI cao nhất (nghịch nhiệt, xe máy đổ ra đường)
+- 10h–14h: AQI thấp nhất trong ngày
+- 18h–21h: AQI tăng lại (giờ cao điểm)
 
 ---
 
